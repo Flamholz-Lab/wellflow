@@ -2,6 +2,7 @@ import pandas as pd
 import datetime as dt
 import numpy as np
 from scipy.stats import linregress, t
+from pathlib import Path
 
 def _normalize_time(time_col:pd.Series) -> pd.Series:
     """
@@ -41,16 +42,28 @@ def _read_wide_table(path:str, header_row:int|None, last_row:int|None, start_col
     """
     Accepts data directly from the plate reader and returns it in a wide format df
     """
+    p = Path(path)
+    if not p.is_file():
+        raise ValueError(f"File {p} does not exist")
+    if not path.endswith(".xlsx") and not path.endswith(".csv"):
+        raise ValueError(f"File {p} is not an Excel file")
+
     if header_row is None:
         header_row = 1
         header_idx = 0
     else:
         header_idx = header_row -1
     if last_row is None:
-        df = pd.read_excel(path, header = header_idx)
+        if path.endswith(".xlsx"):
+            df = pd.read_excel(path, header = header_idx)
+        else:
+            df = pd.read_csv(path, header = header_idx)
     else:
         n_rows = last_row - header_row
-        df = pd.read_excel(path, header = header_idx, nrows = n_rows)
+        if path.endswith(".xlsx"):
+            df = pd.read_excel(path, header = header_idx, nrows = n_rows)
+        else:
+            df = pd.read_csv(path, header = header_idx, nrows = n_rows)
 
     if start_col is not None: # Optional - skip columns
         start_col = convert_excel_col_to_index(start_col)
@@ -171,8 +184,15 @@ def read_flagged_wells(path: str, well_col: str = "well", desc_well:str="notes")
     Reads an Excel file listing wells to flag
     Returns a DataFrame with a 'well' column and is_flagged column.
     """
-    flagged = pd.read_excel(path)
-    flagged = flagged.copy()
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"File {path} not found")
+    if path.endswith(".xlsx"):
+        flagged = pd.read_excel(path)
+    elif path.endswith(".csv"):
+        flagged = pd.read_csv(path)
+    else:
+        raise ValueError(f"File {path} is not an Excel file.")
     flagged.rename(columns={well_col: "well", desc_well:"notes"}, inplace=True)
     # normalize wells like "a1" -> "A1"
     flagged["well"] = flagged["well"].astype(str).str.strip().str.upper()
