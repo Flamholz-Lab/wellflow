@@ -188,16 +188,33 @@ def add_flag_column(measurements: pd.DataFrame, flagged_wells: pd.DataFrame|str,
     appears in flagged_wells['well'].
     """
     if isinstance(flagged_wells, pd.DataFrame):
-        df = flagged_wells.copy()
+        flags = flagged_wells.copy()
     elif isinstance(flagged_wells, str):
-        df = read_flagged_wells(flagged_wells, well_col, desc_well)
+        flags = read_flagged_wells(flagged_wells, well_col, desc_well)
     else:
         raise ValueError("Flagged wells must be a DataFrame or a path")
-    flag_set = set(flagged_wells["well"].astype(str).str.strip().str.upper())
-    measurements["is_flagged"] = df["well"].astype(str).str.strip().str.upper().isin(flag_set)
+    mask = measurements["well"].isin(flags["well"])
+    measurements.insert(len(measurements.columns), 'is_flagged', mask)
     return measurements
 
-
+def drop_flags(measurements:pd.DataFrame, flags:str|pd.DataFrame|None=None)-> pd.DataFrame:
+    """
+    Can provide a list or a file of flags, and if you don't then it's the internal flags already stored in the measurements
+    """
+    # if no flags is provided, it's assumed that measurements already contains flags.
+    # If flags are provided, they override existing flags
+    if flags is None and "is_flagged" in measurements.columns:
+        return measurements[measurements["is_flagged"] == False]
+    # Only getting here if flags were provided (at this point, it doesn't matter if measurement contains flags or not)
+    if isinstance(flags, str): # If flags wasn't a dataframe, make it one
+        flags = read_flagged_wells(flags)
+    if isinstance(flags, pd.DataFrame):
+        return measurements[measurements["well"].isin(flags["well"])]
+    if isinstance(flags, list):
+        flags = [i.upper() for i in flags]
+        flags = list(set(flags))
+        flags.sort()
+        return measurements[measurements["well"].isin(flags)]
 
 def add_blank_value(df:pd.DataFrame, window:int=4, od_col:str="od") -> pd.DataFrame:
     """
@@ -342,9 +359,9 @@ def _calc_mu_max(x, y, w, threshold, epsilon=1e-10):
     d_free = w - 2
     if d_free <= 0 or not np.isfinite(std): return best_mu, np.nan, np.nan # Do I have enough information to compute a valid confidence interval for mu
 
-    tcrit = float(t.ppf(0.975, d_free))
-    mu_low = best_mu - tcrit * std
-    mu_high = best_mu + tcrit * std
+    t_crit = float(t.ppf(0.975, d_free))
+    mu_low = best_mu - t_crit * std
+    mu_high = best_mu + t_crit * std
 
     return best_mu, mu_low, mu_high
 
@@ -353,7 +370,7 @@ def mu_max_create(df, group_by = "well", window=5,od="od_smooth", threshold=None
     if threshold is None:
         threshold = estimate_early_od_threshold(df, od_col=od, n_points=window, q=0.95)
     result = pd.DataFrame(columns=['well', 'mu_max', 'mu_low', 'mu_high','tau', 'tau_low', 'tau_high'  ])
-    for key, group in df.groupby(group_by): # For each well/group to calc mumax for
+    for key, group in df.groupby(group_by): # For each well/group to calc mu_max for
         group = group.sort_values("time_hours")
         best_mu, mu_low, mu_high = _calc_mu_max(group["time_hours"], group[od], window, threshold)
         if best_mu is np.nan and mu_low is np.nan and mu_high is np.nan:
