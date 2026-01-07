@@ -7,7 +7,7 @@ name = "wellflow"
 version = "0.1.0"
 description = "Plate reader growth-rate analysis utilities"
 readme = "README.md"
-requires-python = ">=3.9.6"
+requires-python = ">=3.11"
 authors = [
   { name="Eden Elkayam", email="eelkayam@rockefeller.edu" }
 ]
@@ -15,6 +15,9 @@ dependencies = [
   "pandas>=2.0",
   "numpy>=1.23",
   "openpyxl>=3.1",
+  "scipy>=1.9",
+  "matplotlib>=3.6",
+  "seaborn>=0.12",
 ]
 
 [project.optional-dependencies]
