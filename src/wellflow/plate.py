@@ -147,13 +147,13 @@ def _add_time_hours_from_timedelta(data:pd.DataFrame) -> pd.DataFrame:
 
     return data
 
-def read_plate_measurements(reader_model:str, data_format:str, timepoint_cols:list|tuple, path_to_data:str, header_row:int=1, last_row:int|None=None, start_col:str=0) -> pd.DataFrame:
+def read_plate_measurements(reader_model:str, data_format:str, timepoint_cols:list|tuple, path:str, header_row:int=1, last_row:int|None=None, start_col:str=0) -> pd.DataFrame:
     """ Reads the measurements from the plate and returns a tidy format data frame.
     Args:
         reader_model (str): The reader model
         data_format (str): The data format
         timepoint_cols (list[str]): columns that apply across the plate at each time point
-        path_to_data (str): The path to the data file
+        path (str): The path to the data file
         header_row (int): The row index of the header
         last_row (int): The last row of the data file
         start_col (str): The start column of the data file
@@ -161,9 +161,13 @@ def read_plate_measurements(reader_model:str, data_format:str, timepoint_cols:li
         pd.DataFrame: The tidy format data frame
     Raises:
         ValueError: If the data format or reader model are not supported.  """
+    if timepoint_cols is None or len(timepoint_cols) ==0:
+        raise ValueError("timepoint_cols must be provided and contain at least one column name.")
+    if isinstance(timepoint_cols, str):
+        raise ValueError("timepoint_cols must be a list or tuple of column names, not a single string.")
     if reader_model == "Synergy H1":
         if data_format == "wide":
-            df= _convert_wide_to_tidy(_read_gen5_wide_kinetics_table(path_to_data, header_row, last_row, start_col), timepoint_cols)
+            df= _convert_wide_to_tidy(_read_gen5_wide_kinetics_table(path, header_row, last_row, start_col), timepoint_cols)
             df = _normalize_column_names_gen5_wide(df)
             df = _add_time_hours_from_timedelta(df)
             return df
@@ -221,22 +225,22 @@ def _read_plate_layout_column_blocks(path:str) -> pd.DataFrame:
             design.loc[len(design)] = [well_name] + values
     return design
 
-def read_plate_layout(path:str, data_format:str):
+def read_plate_layout(path:str, format:str):
     """Read a plate layout file and return a tidy per-well design table.
 
      Args:
          path: Path to a plate layout file or a DataFrame.
-         data_format: Plate layout format. Currently supported: "column_blocks".
+         data: Plate layout format. Currently supported: "column_blocks".
 
      Returns:
          A tidy DataFrame with one row per well and one column per condition.
 
      Raises:
          ValueError: If the requested layout format is not supported. """
-    if data_format == "column_blocks":
+    if format == "column_blocks":
         return _read_plate_layout_column_blocks(path)
     else:
-        raise ValueError(f"Unsupported format: {data_format}")
+        raise ValueError(f"Unsupported format: {format}")
 
 def merge_measurements_and_conditions(measurements:pd.DataFrame, conditions:pd.DataFrame)-> pd.DataFrame:
     """ Take in a measurement data frame (tidy) and a design data frame and merge them """
