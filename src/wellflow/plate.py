@@ -384,7 +384,7 @@ def with_blank_corrected_od(df:pd.DataFrame, window:int=4, od_col:str="od") -> p
     df = df.sort_values(["time", "well"]).reset_index(drop=True)
     return df
 
-def with_smoothed_od(df:pd.DataFrame, group_by: str|list[str]= "well", od:str = "od_blank",  window:int=5) -> pd.DataFrame:
+def with_smoothed_od(df:pd.DataFrame, group_by: str|list[str]= "well", od_col:str = "od_blank",  window:int=5) -> pd.DataFrame:
     """Return a copy with an added ``od_smooth`` column.
 
     Args:
@@ -404,7 +404,7 @@ def with_smoothed_od(df:pd.DataFrame, group_by: str|list[str]= "well", od:str = 
     df["od_smooth"] = np.nan # Create a new column for the smooth data
     df = df.sort_values(by=sort_by)
     for well, group in df.groupby(group_by):  # well = name (int), group = df for that well
-        smoothed = (group[od].rolling(window, center=True, min_periods=1).mean()) # Replace value with the mean of window cells around it
+        smoothed = (group[od_col].rolling(window, center=True, min_periods=1).mean()) # Replace value with the mean of window cells around it
         df.loc[group.index, "od_smooth"] = smoothed
     df.sort_values(by=sort_by, inplace=True)
     return df
@@ -446,7 +446,7 @@ def _calc_growth_rate(x:pd.Series, y:pd.Series, window:int, epsilon:float)-> np.
         growth_rate[i] = slope         # slope is the growth rate at x[i]
     return growth_rate
 
-def add_growth_rate(df:pd.DataFrame, window:int=5, epsilon:float= 1e-10, group_by: str|list[str] = "well", od:str = "od_smooth") -> pd.DataFrame:
+def add_growth_rate(df:pd.DataFrame, window:int=5, epsilon:float= 1e-10, group_by: str|list[str] = "well", od_col:str = "od_smooth") -> pd.DataFrame:
     """Add a per-time-point growth rate column ('mu').
 
     Args:
@@ -468,7 +468,7 @@ def add_growth_rate(df:pd.DataFrame, window:int=5, epsilon:float= 1e-10, group_b
     # For each unique well, group them
     for well, group in df.groupby(group_by):
         group = group.sort_values("time_hours")
-        d_values = _calc_growth_rate(group["time_hours"], group[od], window,epsilon)
+        d_values = _calc_growth_rate(group["time_hours"], group[od_col], window,epsilon)
         df.loc[group.index, "mu"] = d_values
 
     df.sort_values(by=sort_by, inplace=True)
@@ -545,7 +545,7 @@ def _calc_mu_max(x, y, w, threshold, epsilon=1e-10):
 
     return best_mu, mu_low, mu_high
 
-def summarize_mu_max(df, group_by = "well", window=5, od = "od_smooth", threshold=None):
+def summarize_mu_max(df, group_by = "well", window=5, od_col = "od_smooth", threshold=None):
     """Estimate mu_max (max growth rate) per group.
 
     Scans each group's OD time series with a sliding regression window to
@@ -569,11 +569,11 @@ def summarize_mu_max(df, group_by = "well", window=5, od = "od_smooth", threshol
     """
     #group_by = group_by if isinstance(group_by, list) else [group_by]
     if threshold is None:
-        threshold = estimate_early_od_threshold(df, od_col=od, n_points=window, q=0.95)
+        threshold = estimate_early_od_threshold(df, od_col=od_col, n_points=window, q=0.95)
     result = pd.DataFrame(columns=['well', 'mu_max', 'mu_low', 'mu_high','tau', 'tau_low', 'tau_high'  ])
     for key, group in df.groupby(group_by): # For each well/group to calc mu_max for
         group = group.sort_values("time_hours")
-        best_mu, mu_low, mu_high = _calc_mu_max(group["time_hours"], group[od], window, threshold)
+        best_mu, mu_low, mu_high = _calc_mu_max(group["time_hours"], group[od_col], window, threshold)
         # If no valid window was found, _calc_mu_max returns NaNs
         if np.isnan(best_mu) and np.isnan(mu_low) and np.isnan(mu_high):
             print(f"No meaningful growth found for this group: {key}")
