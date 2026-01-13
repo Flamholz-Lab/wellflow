@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import linregress, t
 from pathlib import Path
 import warnings
+from sklearn.linear_model import LinearRegression
 
 def _normalize_time_to_timedelta(time_col:pd.Series) -> pd.Series:
     """Normalizes a time column into pandas Timedelta format.
@@ -225,22 +226,24 @@ def _read_plate_layout_column_blocks(path:str) -> pd.DataFrame:
             design.loc[len(design)] = [well_name] + values
     return design
 
-def read_plate_layout(path:str, format:str):
+def read_plate_layout(path: str, format: str | None = None, data_format: str | None = None):
     """Read a plate layout file and return a tidy per-well design table.
 
      Args:
          path: Path to a plate layout file or a DataFrame.
-         data: Plate layout format. Currently supported: "column_blocks".
+         format: Plate layout format. Currently supported: "column_blocks".
+         data_format: Alias for ``format`` (backwards compatibility with tests).
 
      Returns:
          A tidy DataFrame with one row per well and one column per condition.
 
      Raises:
          ValueError: If the requested layout format is not supported. """
-    if format == "column_blocks":
+    fmt = format if format is not None else data_format
+    if fmt == "column_blocks":
         return _read_plate_layout_column_blocks(path)
     else:
-        raise ValueError(f"Unsupported format: {format}")
+        raise ValueError(f"Unsupported format: {fmt}")
 
 def merge_measurements_and_conditions(measurements:pd.DataFrame, conditions:pd.DataFrame)-> pd.DataFrame:
     """ Take in a measurement data frame (tidy) and a design data frame and merge them """
@@ -441,8 +444,10 @@ def _calc_growth_rate(x:pd.Series, y:pd.Series, window:int, epsilon:float)-> np.
         xs_win = xs[valid]
         ys_win = ys[valid]
 
-        slope, intercept = np.polyfit(xs_win, ys_win, 1) # fit a line
-
+        model = LinearRegression()
+        model.fit(xs_win.reshape(-1, 1), ys_win)
+        slope = model.coef_[0]
+        intercept = model.intercept_
         growth_rate[i] = slope         # slope is the growth rate at x[i]
     return growth_rate
 
@@ -509,8 +514,11 @@ def _calc_mu_max(x, y, w, threshold, epsilon=1e-10):
             cutoff to avoid log(0).
 
     Returns:
-        tuple: (best_mu, mu_low, mu_high) where each is a float or ``np.nan``
-            when no valid window was found or the CI could not be computed.
+        tuple: (best_mu, mu_low, mu_high, t_center, t_start, t_end)
+            where each numeric value is a float (hours) or ``np.nan`` when
+            no valid window was found or the CI could not be computed. The
+            times refer to the best window's midpoint, start, and end times
+            (based on ``x``).
     """
     x = np.asarray(x, float)
     y = np.asarray(y, float)
@@ -518,6 +526,7 @@ def _calc_mu_max(x, y, w, threshold, epsilon=1e-10):
     n = len(x)
     best_mu = -np.inf
     std = np.nan
+    best_i = None
     for i in range(n):
         x_slice = x[i:i+w]
         y_slice = y[i:i+w]
@@ -532,18 +541,26 @@ def _calc_mu_max(x, y, w, threshold, epsilon=1e-10):
         if mu >best_mu:
             best_mu = mu
             std = float(res.stderr)
+            best_i = i
 
     # Done looking at all windows, compute the actual values now
     if best_mu == -np.inf: # If best_mu is still -infinity, no one replaced it so there's no mu max (no one qualified)
-        return np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
     d_free = w - 2
-    if d_free <= 0 or not np.isfinite(std): return best_mu, np.nan, np.nan # Do I have enough information to compute a valid confidence interval for mu
+    # Times for the best window
+    t_start = float(x[best_i])
+    t_end = float(x[best_i + w - 1])
+    t_center = 0.5 * (t_start + t_end)
+
+    if d_free <= 0 or not np.isfinite(std):
+        # Not enough information to compute CI; still return timing info
+        return best_mu, np.nan, np.nan, t_center, t_start, t_end # Do I have enough information to compute a valid confidence interval for mu
 
     t_crit = float(t.ppf(0.975, d_free))
     mu_low = best_mu - t_crit * std
     mu_high = best_mu + t_crit * std
 
-    return best_mu, mu_low, mu_high
+    return best_mu, mu_low, mu_high, t_center, t_start, t_end
 
 def summarize_mu_max(df, group_by = "well", window=5, od_col = "od_smooth", threshold=None):
     """Estimate mu_max (max growth rate) per group.
@@ -563,17 +580,17 @@ def summarize_mu_max(df, group_by = "well", window=5, od_col = "od_smooth", thre
             otherwise used as the minimum OD cutoff for valid windows.
 
     Returns:
-        pd.DataFrame: Table with columns ``['well','mu_max','mu_low',
-        'mu_high','tau','tau_low','tau_high']`` containing the results per
-        group.
+        pd.DataFrame: Table with columns
+        ``['well','mu_max','mu_low','mu_high','tau','tau_low','tau_high',
+        't_mu_max','t_start','t_end']`` containing the results per group.
     """
     #group_by = group_by if isinstance(group_by, list) else [group_by]
     if threshold is None:
         threshold = estimate_early_od_threshold(df, od_col=od_col, n_points=window, q=0.95)
-    result = pd.DataFrame(columns=['well', 'mu_max', 'mu_low', 'mu_high','tau', 'tau_low', 'tau_high'  ])
+    result = pd.DataFrame(columns=['well', 'mu_max', 'mu_low', 'mu_high','tau', 'tau_low', 'tau_high', 't_mu_max', 't_start', 't_end'])
     for key, group in df.groupby(group_by): # For each well/group to calc mu_max for
         group = group.sort_values("time_hours")
-        best_mu, mu_low, mu_high = _calc_mu_max(group["time_hours"], group[od_col], window, threshold)
+        best_mu, mu_low, mu_high, t_center, t_start, t_end = _calc_mu_max(group["time_hours"], group[od_col], window, threshold)
         # If no valid window was found, _calc_mu_max returns NaNs
         if np.isnan(best_mu) and np.isnan(mu_low) and np.isnan(mu_high):
             print(f"No meaningful growth found for this group: {key}")
@@ -581,7 +598,7 @@ def summarize_mu_max(df, group_by = "well", window=5, od_col = "od_smooth", thre
         tau_2p5 = np.log(2) / mu_high if mu_high > 0 else np.nan  # fastest
         tau_97p5 = np.log(2) / mu_low if mu_low > 0 else np.nan  # slowest
 
-        result.loc[len(result)] = [key, best_mu, mu_low, mu_high, tau, tau_2p5, tau_97p5]
+        result.loc[len(result)] = [key, best_mu, mu_low, mu_high, tau, tau_2p5, tau_97p5, t_center, t_start, t_end]
     return result
 
 # Backwards-compatible aliases for older API names (module-level)
