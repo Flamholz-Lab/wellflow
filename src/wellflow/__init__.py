@@ -1,4 +1,5 @@
 from .plate import (
+    convert_excel_col_to_index,
     read_plate_measurements,
     read_plate_layout,
     merge_measurements_and_conditions,
@@ -22,6 +23,7 @@ mu_max_create = summarize_mu_max
 read_plate_design = read_plate_layout
 
 __all__ = [
+    "convert_excel_col_to_index",
     "read_plate_measurements",
     "read_plate_layout",
     "read_plate_design",

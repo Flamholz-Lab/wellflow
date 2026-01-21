@@ -4,7 +4,6 @@ import numpy as np
 from scipy.stats import linregress, t
 from pathlib import Path
 import warnings
-from sklearn.linear_model import LinearRegression
 
 def _normalize_time_to_timedelta(time_col:pd.Series) -> pd.Series:
     """Normalizes a time column into pandas Timedelta format.
@@ -12,7 +11,7 @@ def _normalize_time_to_timedelta(time_col:pd.Series) -> pd.Series:
        Args:
            time_col (pd.Series): The time column to normalize.
 
-       Returns:
+       Returns:c
            pd.Database: The normalized time column in a pandas Timedelta format.
 
        Raises:
@@ -444,10 +443,11 @@ def _calc_growth_rate(x:pd.Series, y:pd.Series, window:int, epsilon:float)-> np.
         xs_win = xs[valid]
         ys_win = ys[valid]
 
-        model = LinearRegression()
-        model.fit(xs_win.reshape(-1, 1), ys_win)
-        slope = model.coef_[0]
-        intercept = model.intercept_
+        # Fit a simple linear regression using numpy.polyfit to avoid a scikit-learn dependency.
+        # xs_win and ys_win are 1-D arrays of floats here.
+        if xs_win.size < 2:
+            continue
+        slope, intercept = np.polyfit(xs_win, ys_win, 1)
         growth_rate[i] = slope         # slope is the growth rate at x[i]
     return growth_rate
 
