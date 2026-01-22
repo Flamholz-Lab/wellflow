@@ -1,10 +1,13 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
+import re
 
 def plot_grouped(group_by, df, x_col, y_col, x_label, y_label, title,
                  plot_by=None, 
-                 marker=None, log=False, font_size=14, xlim=None, ylim=None):
+                 marker=None, log=False, font_size=14, xlim=None, ylim=None,
+                 save=False):
   
     # validate required columns
     required = {x_col, y_col, group_by}
@@ -46,13 +49,23 @@ def plot_grouped(group_by, df, x_col, y_col, x_label, y_label, title,
     ax.set_title(title)
 
     plt.tight_layout()
+    if save:
+        file_name = re.sub(r"[^A-Za-z0-9._-]+", "_", (title).strip())
+        file_name += ".png"
+        name, ext = os.path.splitext(file_name)
+        i = 1
+        while os.path.exists(file_name):
+            file_name = f"{name}_{i}{ext}"
+            i += 1
+        fig.savefig(file_name, dpi=300, bbox_inches='tight')
     plt.show()
 
 
 
 def plot_separate_by_group(group_by, df, x_col, y_col, x_label, y_label, title,
                            plot_by=None, marker=None, log=False, font_size=14,
-                           col_wrap=3, sharey=True, palette=None, xlim=None, ylim=None):
+                           col_wrap=3, sharey=True, palette=None, xlim=None, ylim=None,
+                           save=False):
     # validate required columns
     required = {x_col, y_col, group_by}
     if plot_by is not None:
@@ -125,4 +138,14 @@ def plot_separate_by_group(group_by, df, x_col, y_col, x_label, y_label, title,
     # One overall title
     fig.tight_layout(rect=[0, 0, 1, 0.93])
     fig.suptitle(title, y=0.995)
+    if save:
+        file_name = re.sub(r"[^A-Za-z0-9._-]+", "_", (title).strip())
+        file_name += ".png"
+        name, ext = os.path.splitext(file_name)
+        i = 1
+        while os.path.exists(file_name):
+            file_name = f"{name}_{i}{ext}"
+            i += 1
+        fig.savefig(file_name, dpi=300, bbox_inches='tight')
     plt.show()
+
