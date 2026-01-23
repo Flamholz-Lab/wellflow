@@ -7,7 +7,7 @@ import re
 def plot_grouped(group_by, df, x_col, y_col, x_label, y_label, title,
                  plot_by=None, 
                  marker=None, log=False, font_size=14, xlim=None, ylim=None,
-                 save=False):
+                 save=False, palette=None):
   
     # validate required columns
     required = {x_col, y_col, group_by}
@@ -29,6 +29,7 @@ def plot_grouped(group_by, df, x_col, y_col, x_label, y_label, title,
         x=x_col,
         y=y_col,
         hue=group_by,
+        palette=palette,
         units=plot_by if plot_by is not None else None,
         estimator=None if plot_by is not None else "mean",
         lw=1.2,
@@ -64,8 +65,8 @@ def plot_grouped(group_by, df, x_col, y_col, x_label, y_label, title,
 
 def plot_separate_by_group(group_by, df, x_col, y_col, x_label, y_label, title,
                            plot_by=None, marker=None, log=False, font_size=14,
-                           col_wrap=3, sharey=True, palette=None, xlim=None, ylim=None,
-                           save=False):
+                           col_wrap=3, sharey=True, xlim=None, ylim=None,
+                           save=False, palette=None):
     # validate required columns
     required = {x_col, y_col, group_by}
     if plot_by is not None:
@@ -94,14 +95,6 @@ def plot_separate_by_group(group_by, df, x_col, y_col, x_label, y_label, title,
         except Exception:
             axes_list = [axes]
 
-    if palette is None:
-        base_palette = sns.color_palette(n_colors=n)
-        palette_map = {lvl: base_palette[i % len(base_palette)] for i, lvl in enumerate(levels)}
-    elif isinstance(palette, dict):
-        palette_map = palette
-    else:
-        palette_map = {lvl: palette[i % len(palette)] for i, lvl in enumerate(levels)}
-
     # Plot each group's lines separately
     for i, lvl in enumerate(levels):
         ax_i = axes_list[i]
@@ -116,7 +109,7 @@ def plot_separate_by_group(group_by, df, x_col, y_col, x_label, y_label, title,
             lw=1.2,
             alpha=0.8,
             marker=marker,
-            color=palette_map.get(lvl),
+            color=palette[i % len(palette)] if palette is not None else None,
             ax=ax_i,
         )
 
