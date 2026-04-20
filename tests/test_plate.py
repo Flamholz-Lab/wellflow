@@ -4,7 +4,12 @@ import os
 import sys
 # Prefer local src/wellflow over any installed package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
-import wellflow.plate as wf
+import wellflow as wf
+from wellflow.io import (
+    _convert_wide_to_tidy,
+    _normalize_column_names_gen5_wide,
+    _add_time_hours_from_timedelta,
+)
 
 
 class TestPlate(unittest.TestCase):
@@ -67,13 +72,13 @@ class TestPlate(unittest.TestCase):
 
     def test_wide_to_tidy(self):
         before = self.rawData.copy()
-        after = wf._convert_wide_to_tidy(before, ["Time", "T° 600"])
-        after = wf._normalize_column_names_gen5_wide(after)
+        after = _convert_wide_to_tidy(before, ["Time", "T° 600"])
+        after = _normalize_column_names_gen5_wide(after)
         expected_after = self.tidy.sort_values(by=["time", "well"])
         pd.testing.assert_frame_equal(after, expected_after)
 
     def test_add_time_hours(self):
-        after = wf._add_time_hours_from_timedelta(self.tidy)
+        after = _add_time_hours_from_timedelta(self.tidy)
         pd.testing.assert_frame_equal(after, self.tidy_with_time)
 
     def test_plate_design(self):
@@ -83,11 +88,11 @@ class TestPlate(unittest.TestCase):
         pd.testing.assert_frame_equal(after, expected)
 
     def test_blank(self):
-        actual = wf.with_blank_corrected_od(self.full_raw, 2)
+        actual = wf.add_blank_correction(self.full_raw, 2)
         pd.testing.assert_frame_equal(actual,self.full_with_blanks)
 
     def test_smooth(self):
-        actual = wf.with_smoothed_od(self.full_with_blanks, window=3)
+        actual = wf.add_smoothed_od(self.full_with_blanks, window=3)
         actual["od_smooth"] = actual["od_smooth"].round(6)
         pd.testing.assert_frame_equal(actual, self.full_with_smooth)
 

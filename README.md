@@ -3,95 +3,68 @@
 A Python package for processing plate reader growth data and estimating microbial growth rates.
 
 `wellflow` provides a reproducible pipeline for:
-- converting plate reader exports into tidy data
-- blank correction and smoothing
-- growth rate estimation via rolling log-linear regression
-- extracting maximum growth rates per well or experimental condition
-
-The package is designed for day-to-day experimental analysis in microbiology labs and prioritizes clarity, transparency, and reproducibility.
+- Converting plate reader exports into tidy data
+- Blank correction and smoothing
+- Growth rate estimation via rolling log-linear regression
+- Extracting maximum growth rates per well or experimental condition
 
 ---
 
 ## Installation
 
-### From GitHub (recommended)
-
 ```bash
 pip install git+https://github.com/flamholz-lab/wellflow.git
 ```
 
-### Editable install (for development)
-
-```bash
-git clone https://github.com/<Flamholz-Lab>/wellflow.git
-cd wellflow
-pip install -e .
-```
+Requires Python ≥ 3.11.
 
 ---
 
-## Requirements
+## Getting the examples
 
-* Python ≥ 3.10
-* pandas
-* numpy
-* openpyxl
-
-## Basic usage
-
-### 1. Load plate reader measurements
+After installing, copy the example notebooks and data files to your current directory:
 
 ```python
-from wellflow import read_plate_measurements
+import wellflow as wf
+wf.copy_examples()
+```
 
-df = read_plate_measurements(
-    path_to_data="plate_reader_output.xlsx",
-    header_row=2,
-    last_row=150,
-    start_col="C"
+This gives you `workflow.ipynb` (full pipeline walkthrough) and `plot.ipynb` (plotting), along with the example data files they use. Open and run them from the same directory.
+
+---
+
+## Quick start
+
+```python
+import wellflow as wf
+
+# 1. Load plate reader output (Synergy H1, wide format)
+raw = wf.read_plate_measurements(
+    path="plate_reader_output.xlsx",
+    reader_model="Synergy H1",
+    data_format="wide",
+    timepoint_cols=["Time", "T° 600"],
+    header_row=44,
+    last_row=237,
+    start_col="B",
 )
 
-```
-This returns a tidy dataframe with one row per (time, well) and a time_hours column.
+# 2. Load plate layout and merge
+layout = wf.read_plate_layout(path="plate_layout.xlsx", format="column_blocks")
+df = wf.merge_with_layout(measurements=raw, layout=layout)
 
-### 2. Add experimental design metadata
+# 3. Remove bad wells (optional)
+df = wf.drop_flags(df, flags="flagged_wells.xlsx")
 
-```python
-from wellflow import read_plate_design, merge_measurements_and_conditions
+# 4. Blank correction and smoothing
+df = wf.add_blank_correction(df, window=4)
+df = wf.add_smoothed_od(df, window=5)
 
-design = read_plate_design("plate_design.xlsx")
-df = merge_measurements_and_conditions(df, design)
-```
+# 5. Per-timepoint growth rate
+df = wf.add_growth_rate(df, window=9)
 
-### 3. Blank correction and smoothing
-
-```python
-from wellflow import add_blank_value, add_smoothed_od
-
-df = add_blank_value(df, window=4)
-df = add_smoothed_od(df, window=5)
+# 6. Maximum growth rate per well
+mu_max = wf.compute_mu_max(df, window=8)
 ```
 
-### 4. Growth rate estimation
-
-```python
-from wellflow import add_growth_rate, add_max_growth_rate
-
-df = add_growth_rate(df, window=5)
-df = add_max_growth_rate(df)
-```
-
-This adds:
-* mu: instantaneous growth rate estimated from log-linear regression
-* mu_max: maximum growth rate per well or condition
-* t_at_mu_max: time at which maximum growth rate occurs
-
-
-
-
-
-
-
-
-
-
+For a detailed walkthrough of each step and plotting, see the example notebooks (`wf.copy_examples()`).
